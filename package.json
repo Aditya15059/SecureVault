@@ -1,17 +1,11 @@
 {
-<<<<<<< HEAD
   "name": "securevault",
   "version": "1.0.0",
-  "private": true
-=======
-  "name": "final-year-project",
   "private": true,
-  "version": "0.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "lint": "eslint .",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -31,5 +25,4 @@
     "globals": "^17.4.0",
     "vite": "^8.0.1"
   }
->>>>>>> 1ed3295 (Initial commit - SecureVault)
 }
