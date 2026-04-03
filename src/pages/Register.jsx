@@ -1,8 +1,10 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { ShieldCheck, Mail, Key, User } from 'lucide-react';
 
 const Register = () => {
+  const navigate = useNavigate();
+
   return (
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '2rem' }}>
       <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: '400px', height: '400px', background: '#3b82f6', filter: 'blur(150px)', opacity: 0.1, borderRadius: '50%', zIndex: -1 }}></div>
@@ -16,7 +18,7 @@ const Register = () => {
           <p className="text-dim">Generate your encryption keys & access profile.</p>
         </div>
 
-        <form onSubmit={(e) => { e.preventDefault(); window.location.href='/dashboard'; }}>
+        <form onSubmit={(e) => { e.preventDefault(); navigate('/dashboard'); }}>
           <div className="input-group">
             <label>Username</label>
             <div style={{ position: 'relative' }}>

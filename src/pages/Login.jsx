@@ -1,8 +1,10 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Lock, Mail, Key } from 'lucide-react';
 
 const Login = () => {
+  const navigate = useNavigate();
+
   return (
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '2rem' }}>
       {/* Background shape */}
@@ -17,7 +19,7 @@ const Login = () => {
           <p className="text-dim">Enter your credentials to proceed.</p>
         </div>
 
-        <form onSubmit={(e) => { e.preventDefault(); window.location.href='/dashboard'; }}>
+        <form onSubmit={(e) => { e.preventDefault(); navigate('/dashboard'); }}>
           <div className="input-group">
             <label>Username or Email</label>
             <div style={{ position: 'relative' }}>
