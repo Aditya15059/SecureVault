@@ -2,15 +2,15 @@ import React, { useRef, useEffect, useCallback } from 'react';
 
 const ParticleBackground = ({ 
   particleCount = 80, 
-  color = '#39FF14', 
-  glowColor = 'rgba(57, 255, 20, 0.15)', 
+  color = '#7c3aed', 
+  glowColor = 'rgba(124, 58, 237, 0.15)', 
   connectDistance = 140, 
   speed = 0.3 
 }) => {
   const canvasRef = useRef(null);
   const particlesRef = useRef([]);
-  // Eased mouse position for the foggy glow
-  const mouseRef = useRef({ x: -1000, y: -1000, easedX: -1000, easedY: -1000 });
+  // Eased mouse position for the foggy glow + trail array
+  const mouseRef = useRef({ x: -1000, y: -1000, easedX: -1000, easedY: -1000, trail: [] });
   const animFrameRef = useRef(null);
 
   const initParticles = useCallback((width, height) => {
@@ -82,9 +82,30 @@ const ParticleBackground = ({
 
       // Ease mouse position for smooth foggy glow tracking
       if (mouse.x !== -1000) {
-        mouse.easedX += (mouse.x - mouse.easedX) * 0.05;
-        mouse.easedY += (mouse.y - mouse.easedY) * 0.05;
+        mouse.easedX += (mouse.x - mouse.easedX) * 0.15;
+        mouse.easedY += (mouse.y - mouse.easedY) * 0.15;
+        mouse.trail.push({ x: mouse.easedX, y: mouse.easedY, alpha: 0.5 });
       }
+
+      // Draw Moving Cyber Grid
+      const time = Date.now() * 0.001;
+      const gridSize = 60;
+      const offsetY = (time * 15) % gridSize;
+      
+      ctx.beginPath();
+      ctx.strokeStyle = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.06)`;
+      ctx.lineWidth = 1;
+      // Vertical
+      for (let x = 0; x <= width; x += gridSize) {
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, height);
+      }
+      // Horizontal (Moving Down)
+      for (let y = offsetY; y <= height; y += gridSize) {
+        ctx.moveTo(0, y);
+        ctx.lineTo(width, y);
+      }
+      ctx.stroke();
 
       // Draw the ambient mouse fog (Antigravity glow effect)
       if (mouse.easedX !== -1000 && mouse.x !== -1000) {
@@ -97,6 +118,29 @@ const ParticleBackground = ({
         
         ctx.fillStyle = gradient;
         ctx.fillRect(0, 0, width, height);
+      }
+
+      // Draw Cursor Trail Line
+      if (mouse.trail && mouse.trail.length > 0) {
+        ctx.beginPath();
+        for (let i = 0; i < mouse.trail.length; i++) {
+          const pt = mouse.trail[i];
+          if (i === 0) ctx.moveTo(pt.x, pt.y);
+          else ctx.lineTo(pt.x, pt.y);
+          pt.alpha -= 0.02; // Fade out speed
+        }
+        
+        // Remove dead points
+        mouse.trail = mouse.trail.filter(pt => pt.alpha > 0);
+        
+        ctx.strokeStyle = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.2)`;
+        ctx.lineWidth = 15;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.shadowBlur = 30;
+        ctx.shadowColor = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0.8)`;
+        ctx.stroke();
+        ctx.shadowBlur = 0; // Reset
       }
 
       // Update & draw particles

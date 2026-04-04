@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
-import { Upload, Cpu, Search, AlertTriangle, CheckCircle2, Database, Wifi, Shield } from 'lucide-react';
+import { Upload, Cpu, Search, AlertTriangle, CheckCircle2, Database, Wifi, Shield, BarChart3 } from 'lucide-react';
+import { SpotlightCard } from '../components/ui/SpotlightCard';
+import { GlowCardGrid } from '../components/ui/GlowCardGrid';
 
 const Detection = () => {
   const [file, setFile] = useState(null);
@@ -126,7 +128,7 @@ const Detection = () => {
       {result && (
         <div style={{ animation: 'fadeIn 0.5s ease', marginBottom: '2.5rem' }}>
           {result === 'normal' ? (
-            <div className="card" style={{ display: 'flex', alignItems: 'flex-start', gap: '1.5rem', borderColor: 'rgba(57,255,20,0.2)' }}>
+            <SpotlightCard glowColor="purple" customSize={true} width="100%" className="card" style={{ display: 'flex', alignItems: 'flex-start', gap: '1.5rem', borderColor: 'rgba(57,255,20,0.2)', padding: '1.5rem', flexDirection: 'row' }}>
               <CheckCircle2 size={32} color="var(--color-primary)" style={{ flexShrink: 0, filter: 'drop-shadow(0 0 8px rgba(57,255,20,0.3))' }} />
               <div style={{ width: '100%' }}>
                 <h3 style={{ color: 'var(--color-primary)', margin: '0 0 0.5rem 0', fontSize: '1.25rem' }}>Clean Image</h3>
@@ -139,9 +141,9 @@ const Detection = () => {
                   <div style={{ height: '100%', background: 'var(--color-primary)', width: '98.4%', borderRadius: '3px', boxShadow: '0 0 8px var(--color-primary-glow)' }}></div>
                 </div>
               </div>
-            </div>
+            </SpotlightCard>
           ) : (
-            <div className="card" style={{ display: 'flex', alignItems: 'flex-start', gap: '1.5rem', borderColor: 'rgba(255,180,171,0.3)' }}>
+            <SpotlightCard glowColor="purple" customSize={true} width="100%" className="card" style={{ display: 'flex', alignItems: 'flex-start', gap: '1.5rem', borderColor: 'rgba(255,180,171,0.3)', padding: '1.5rem', flexDirection: 'row' }}>
               <AlertTriangle size={32} color="var(--color-danger)" style={{ flexShrink: 0, filter: 'drop-shadow(0 0 8px rgba(255,180,171,0.3))' }} />
               <div style={{ width: '100%' }}>
                 <h3 style={{ color: 'var(--color-danger)', margin: '0 0 0.5rem 0', fontSize: '1.25rem' }}>Steganography Detected!</h3>
@@ -154,7 +156,7 @@ const Detection = () => {
                   <div style={{ height: '100%', background: 'var(--color-danger)', width: '95.2%', borderRadius: '3px' }}></div>
                 </div>
               </div>
-            </div>
+            </SpotlightCard>
           )}
         </div>
       )}
@@ -165,20 +167,41 @@ const Detection = () => {
           <div style={{ width: '28px', height: '3px', background: 'var(--color-primary)', borderRadius: '2px' }}></div>
           <h2 style={{ fontSize: '1.25rem', margin: 0 }}>How AI Detection Works</h2>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.25rem' }}>
+        <GlowCardGrid columns={3}>
           {[
             { title: 'LSB Analysis', desc: 'Examines Least Significant Bits for statistical anomalies that suggest data insertion.' },
             { title: 'Spectral Triage', desc: 'Multi-spectral scanning detects noise patterns inconsistent with natural image sensors.' },
             { title: 'Neural Verification', desc: 'Deep learning models trained on millions of steganographic samples identify complex payloads.' },
           ].map((item, i) => (
-            <div key={i} className="card" style={{ padding: '1.75rem' }}>
+            <SpotlightCard key={i} glowColor="purple" className="card" style={{ padding: '1.75rem', height: '100%' }}>
               <div style={{ background: 'var(--color-primary-dim)', width: '36px', height: '36px', borderRadius: 'var(--radius-md)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--color-primary)', marginBottom: '1rem' }}>
                 <Cpu size={18} />
               </div>
               <h3 style={{ fontSize: '1.0625rem', margin: '0 0 0.5rem 0' }}>{item.title}</h3>
               <p style={{ color: 'var(--color-text-dim)', margin: 0, fontSize: '0.875rem', lineHeight: 1.6 }}>{item.desc}</p>
-            </div>
+            </SpotlightCard>
           ))}
+        </GlowCardGrid>
+        
+        {/* Model Accuracy Visualization */}
+        <div style={{ marginTop: '2rem', display: 'flex', justifyContent: 'center' }}>
+          <SpotlightCard glowColor="purple" size="lg" className="card" style={{ padding: '2rem', display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+            <BarChart3 size={40} color="var(--color-primary)" style={{ marginBottom: '1rem' }} />
+            <h3 style={{ fontSize: '1.25rem', marginBottom: '0.5rem' }}>Global Detection Accuracy</h3>
+            <p className="text-dim" style={{ marginBottom: '1.5rem', maxWidth: '400px' }}>
+              Our hybrid stego-engine retains a 99.4% true-positive rate against advanced adversarial embedding techniques.
+            </p>
+            <div style={{ display: 'flex', gap: '2rem', width: '100%', justifyContent: 'center' }}>
+              <div>
+                <p style={{ fontSize: '2rem', fontWeight: 700, margin: 0, color: 'var(--color-primary)', fontFamily: 'monospace' }}>99.4%</p>
+                <span className="text-dim" style={{ fontSize: '0.75rem', textTransform: 'uppercase' }}>Accuracy</span>
+              </div>
+              <div>
+                <p style={{ fontSize: '2rem', fontWeight: 700, margin: 0, color: 'var(--color-primary)', fontFamily: 'monospace' }}>1.2k</p>
+                <span className="text-dim" style={{ fontSize: '0.75rem', textTransform: 'uppercase' }}>Signatures</span>
+              </div>
+            </div>
+          </SpotlightCard>
         </div>
       </section>
     </div>

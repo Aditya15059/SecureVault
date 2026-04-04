@@ -1,6 +1,6 @@
 import React from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Lock, Unlock, Image, ShieldAlert, Settings, LogOut } from 'lucide-react';
+import { LayoutDashboard, Lock, Unlock, Image, ShieldAlert, Settings, LogOut, Fingerprint, Users } from 'lucide-react';
 
 const DashboardLayout = () => {
   const location = useLocation();
@@ -11,13 +11,13 @@ const DashboardLayout = () => {
     { name: 'Decrypt Message', path: '/decrypt', icon: <Unlock size={20} /> },
     { name: 'Hide in Image', path: '/steganography', icon: <Image size={20} /> },
     { name: 'Detect Stego (AI)', path: '/detection', icon: <ShieldAlert size={20} /> },
-
+    { name: 'Team & About', path: '/about', icon: <Users size={20} /> },
     { name: 'Settings', path: '/settings', icon: <Settings size={20} /> },
   ];
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', backgroundColor: 'var(--color-surface)' }}>
-      {/* Sidebar — Obsidian Glass Panel */}
+    <div style={{ display: 'flex', minHeight: '100vh', backgroundColor: 'transparent' }}>
+      {/* Sidebar */}
       <aside style={{
         width: '260px',
         margin: '12px',
@@ -29,6 +29,9 @@ const DashboardLayout = () => {
         backdropFilter: 'blur(24px)',
         WebkitBackdropFilter: 'blur(24px)',
         border: '1px solid var(--color-outline)',
+        position: 'sticky',
+        top: '12px',
+        height: 'calc(100vh - 24px)',
       }}>
         {/* Logo */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '2.5rem', paddingLeft: '0.5rem' }}>
@@ -38,7 +41,7 @@ const DashboardLayout = () => {
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             boxShadow: '0 0 15px var(--color-primary-glow)',
           }}>
-            <Lock size={18} color="#022100" />
+            <Fingerprint size={18} color="#022100" />
           </div>
           <h2 style={{ fontSize: '1.25rem', margin: 0, fontWeight: 700, letterSpacing: '-0.5px', fontFamily: 'var(--font-display)' }}>
             <span className="text-neon">Secure</span>Vault
@@ -75,10 +78,11 @@ const DashboardLayout = () => {
                   borderLeft: isActive ? '3px solid var(--color-primary)' : '3px solid transparent',
                 }}
               >
-                <span style={{
+                <span className={isActive ? 'icon-glow-pulse' : 'icon-cyber'} style={{
                   display: 'flex',
                   opacity: isActive ? 1 : 0.6,
                   transition: 'opacity 0.25s',
+                  color: isActive ? 'var(--color-primary)' : 'inherit',
                 }}>{item.icon}</span>
                 {item.name}
               </Link>
@@ -97,18 +101,17 @@ const DashboardLayout = () => {
             onMouseEnter={(e) => e.currentTarget.style.opacity = 1}
             onMouseLeave={(e) => e.currentTarget.style.opacity = 0.8}
           >
-            <LogOut size={20} />
+            <LogOut size={20} className="icon-cyber" />
             Logout
           </Link>
         </div>
       </aside>
 
       {/* Main Content Area */}
-      <main style={{ flex: 1, padding: '12px 12px 12px 0', overflowY: 'auto', height: '100vh' }}>
+      <main style={{ flex: 1, padding: '12px 12px 12px 0' }}>
         <div style={{
-          height: '100%',
+          minHeight: 'calc(100vh - 24px)',
           borderRadius: 'var(--radius-xl)',
-          overflowY: 'auto',
           position: 'relative',
           background: 'var(--color-surface-container-low)',
           border: '1px solid var(--color-outline)',

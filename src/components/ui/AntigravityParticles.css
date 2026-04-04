@@ -1,0 +1,27 @@
+.antigravity-particles-layer {
+  position: absolute;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 10; /* between canvas and content layer, adjust based on hero layout */
+}
+
+@keyframes float-particle {
+  0% {
+    transform: translate(0, 0);
+  }
+  25% {
+    transform: translate(-30px, 40px);
+  }
+  50% {
+    transform: translate(20px, -20px);
+  }
+  75% {
+    transform: translate(40px, 30px);
+  }
+  100% {
+    transform: translate(0, 0);
+  }
+}
