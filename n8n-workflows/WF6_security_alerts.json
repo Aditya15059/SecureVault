@@ -1,0 +1,227 @@
+{
+  "name": "WF6 — SecureVault Security Alert Notifications",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "securevault/security-alert",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-alert",
+      "name": "Security Alert Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [220, 400],
+      "webhookId": "sv-alert-001"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "combinator": "and",
+          "conditions": [
+            {
+              "leftValue": "={{ $json.headers['x-api-key'] }}",
+              "rightValue": "={{ $env.SV_API_KEY }}",
+              "operator": { "type": "string", "operation": "equals" }
+            }
+          ]
+        }
+      },
+      "id": "api-key-alert",
+      "name": "Validate API Key",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [440, 400]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"status\": \"error\", \"message\": \"Unauthorized\" }",
+        "options": { "responseCode": 401 }
+      },
+      "id": "reject-alert",
+      "name": "Reject",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [600, 620]
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body;\nconst { eventType, email, userId, ip, userAgent, severity, timestamp, executionId } = body;\n\nif (!eventType) throw new Error('eventType required');\n\nconst alertType = eventType.replace('security.', '');\n\nreturn [{\n  json: {\n    alertType,\n    eventType,\n    email: (email || '').toLowerCase(),\n    userId: userId || 'unknown',\n    ip: ip || 'unknown',\n    userAgent: (userAgent || '').substring(0, 300),\n    severity: severity || 'info',\n    timestamp: timestamp || new Date().toISOString(),\n    executionId: executionId || $execution.id\n  }\n}];"
+      },
+      "id": "validate-alert",
+      "name": "Parse Alert",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, 400]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            { "outputIndex": 0, "conditions": { "conditions": [{ "leftValue": "={{ $json.alertType }}", "rightValue": "login.failed.3x", "operator": { "type": "string", "operation": "equals" } }] } },
+            { "outputIndex": 1, "conditions": { "conditions": [{ "leftValue": "={{ $json.alertType }}", "rightValue": "login.failed.5x", "operator": { "type": "string", "operation": "equals" } }] } },
+            { "outputIndex": 1, "conditions": { "conditions": [{ "leftValue": "={{ $json.alertType }}", "rightValue": "account.locked", "operator": { "type": "string", "operation": "equals" } }] } },
+            { "outputIndex": 2, "conditions": { "conditions": [{ "leftValue": "={{ $json.alertType }}", "rightValue": "password.changed", "operator": { "type": "string", "operation": "equals" } }] } }
+          ],
+          "fallbackOutput": 3
+        }
+      },
+      "id": "switch-alert",
+      "name": "Route Alert Type",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [900, 400]
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.email }}",
+        "subject": "⚠️ Unusual login activity on your SecureVault account",
+        "emailType": "html",
+        "message": "<!DOCTYPE html><html><body style=\"margin:0;padding:0;background:#06030f;font-family:'Segoe UI',Arial,sans-serif\"><div style=\"max-width:500px;margin:0 auto;padding:40px 20px\"><div style=\"padding:24px;background:linear-gradient(135deg,#f59e0b,#ef4444);border-radius:16px 16px 0 0;text-align:center\"><h1 style=\"color:#fff;font-size:22px;margin:0\">⚠️ Security Alert</h1></div><div style=\"background:#0e0825;padding:32px;border:1px solid rgba(245,158,11,0.2);border-top:0\"><h2 style=\"color:#f1f5f9;font-size:18px;margin:0 0 16px\">Unusual Login Activity Detected</h2><p style=\"color:#94a3b8;font-size:14px;line-height:1.6\">We detected multiple failed login attempts on your account.</p><div style=\"background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.2);border-radius:8px;padding:16px;margin:16px 0\"><p style=\"color:#fbbf24;font-size:13px;margin:0\">📍 IP: {{ $json.ip }}<br>🕐 Time: {{ $json.timestamp }}</p></div><p style=\"color:#94a3b8;font-size:14px\">If this was you, no action is needed. Otherwise:</p><a href=\"https://aditya15059.github.io/SecureVault/#/forgot-password\" style=\"display:block;text-align:center;background:#ef4444;color:#fff;text-decoration:none;padding:12px;border-radius:8px;font-weight:600;font-size:14px;margin-top:16px\">Secure Your Account →</a></div><div style=\"padding:12px;text-align:center;background:#060212;border-radius:0 0 16px 16px;border:1px solid rgba(245,158,11,0.1);border-top:0\"><p style=\"color:#475569;font-size:11px;margin:0\">SecureVault Security Team</p></div></div></body></html>",
+        "options": {}
+      },
+      "id": "email-3x-warning",
+      "name": "Email: 3x Failed Warning",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [1180, 200],
+      "credentials": { "gmailOAuth2": { "id": "gmail-credential", "name": "Gmail SecureVault" } }
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.email }}",
+        "subject": "🔴 Your SecureVault account has been locked",
+        "emailType": "html",
+        "message": "<!DOCTYPE html><html><body style=\"margin:0;padding:0;background:#06030f;font-family:'Segoe UI',Arial,sans-serif\"><div style=\"max-width:500px;margin:0 auto;padding:40px 20px\"><div style=\"padding:24px;background:#ef4444;border-radius:16px 16px 0 0;text-align:center\"><h1 style=\"color:#fff;font-size:22px;margin:0\">🔴 Account Locked</h1></div><div style=\"background:#0e0825;padding:32px;border:1px solid rgba(239,68,68,0.3);border-top:0\"><h2 style=\"color:#f1f5f9;font-size:18px;margin:0 0 16px\">Your Account Has Been Temporarily Locked</h2><p style=\"color:#94a3b8;font-size:14px;line-height:1.6\">Due to 5 consecutive failed login attempts, your account has been locked for 15 minutes.</p><div style=\"background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.2);border-radius:8px;padding:16px;margin:16px 0\"><p style=\"color:#fca5a5;font-size:13px;margin:0\">📍 IP: {{ $json.ip }}<br>🕐 Locked at: {{ $json.timestamp }}</p></div><p style=\"color:#94a3b8;font-size:14px\">If this wasn't you, reset your password immediately:</p><a href=\"https://aditya15059.github.io/SecureVault/#/forgot-password\" style=\"display:block;text-align:center;background:#ef4444;color:#fff;text-decoration:none;padding:12px;border-radius:8px;font-weight:600;font-size:14px;margin-top:16px\">Reset Password Now →</a></div><div style=\"padding:12px;text-align:center;background:#060212;border-radius:0 0 16px 16px;border:1px solid rgba(239,68,68,0.1);border-top:0\"><p style=\"color:#475569;font-size:11px;margin:0\">SecureVault Security Team</p></div></div></body></html>",
+        "options": {}
+      },
+      "id": "email-locked",
+      "name": "Email: Account Locked",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [1180, 380],
+      "credentials": { "gmailOAuth2": { "id": "gmail-credential", "name": "Gmail SecureVault" } }
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.email }}",
+        "subject": "🔑 Your SecureVault password was changed",
+        "emailType": "html",
+        "message": "<!DOCTYPE html><html><body style=\"margin:0;padding:0;background:#06030f;font-family:'Segoe UI',Arial,sans-serif\"><div style=\"max-width:500px;margin:0 auto;padding:40px 20px\"><div style=\"padding:24px;background:linear-gradient(135deg,#22c55e,#06b6d4);border-radius:16px 16px 0 0;text-align:center\"><h1 style=\"color:#fff;font-size:22px;margin:0\">🔑 Password Changed</h1></div><div style=\"background:#0e0825;padding:32px;border:1px solid rgba(34,197,94,0.2);border-top:0\"><h2 style=\"color:#f1f5f9;font-size:18px;margin:0 0 16px\">Password Successfully Updated</h2><p style=\"color:#94a3b8;font-size:14px;line-height:1.6\">Your SecureVault password was changed on {{ $json.timestamp }}.</p><p style=\"color:#94a3b8;font-size:14px;line-height:1.6;margin-top:16px\">If you did not make this change, reset your password immediately and contact support.</p><a href=\"https://aditya15059.github.io/SecureVault/#/forgot-password\" style=\"display:block;text-align:center;background:#ef4444;color:#fff;text-decoration:none;padding:12px;border-radius:8px;font-weight:600;font-size:14px;margin-top:20px\">Not you? Secure Account →</a></div><div style=\"padding:12px;text-align:center;background:#060212;border-radius:0 0 16px 16px\"><p style=\"color:#475569;font-size:11px;margin:0\">SecureVault Security Team</p></div></div></body></html>",
+        "options": {}
+      },
+      "id": "email-pw-changed",
+      "name": "Email: Password Changed",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [1180, 560],
+      "credentials": { "gmailOAuth2": { "id": "gmail-credential", "name": "Gmail SecureVault" } }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $env.ADMIN_TELEGRAM_CHAT_ID }}",
+        "text": "{{ $json.severity === 'critical' ? '🔴' : '⚠️' }} *SecureVault Security Alert*\n\n📋 Type: `{{ $json.alertType }}`\n🔒 Severity: *{{ $json.severity }}*\n📧 Email: {{ $json.email }}\n🆔 User: {{ $json.userId }}\n📍 IP: {{ $json.ip }}\n🕐 Time: {{ $json.timestamp }}",
+        "additionalFields": { "parse_mode": "Markdown" }
+      },
+      "id": "telegram-alert",
+      "name": "Telegram: Alert Admin",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [1180, 740],
+      "credentials": { "telegramApi": { "id": "telegram-credential", "name": "SecureVault Bot" } }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO sv_security_alerts (execution_id, user_id, email, alert_type, severity, ip_address, created_at)\nVALUES ($1, $2, $3, $4, $5, $6, $7);",
+        "options": {
+          "queryReplacement": "={{ [$json.executionId, $json.userId, $json.email, $json.alertType, $json.severity, $json.ip, $json.timestamp] }}"
+        }
+      },
+      "id": "rds-alert",
+      "name": "RDS: Log Alert",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [1440, 400],
+      "credentials": { "postgres": { "id": "rds-credential", "name": "AWS RDS SecureVault" } }
+    },
+    {
+      "parameters": {
+        "documentId": { "__rl": true, "mode": "list", "value": "" },
+        "sheetName": { "__rl": true, "value": "Security Alerts" },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Timestamp": "={{ $json.timestamp }}",
+            "AlertType": "={{ $json.alertType }}",
+            "Severity": "={{ $json.severity }}",
+            "Email": "={{ $json.email }}",
+            "UserId": "={{ $json.userId }}",
+            "IP": "={{ $json.ip }}",
+            "Status": "active"
+          }
+        },
+        "options": {}
+      },
+      "id": "sheets-alert",
+      "name": "Sheets: Log Alert",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [1440, 600],
+      "credentials": { "googleSheetsOAuth2Api": { "id": "gsheets-credential", "name": "Google Sheets SecureVault" } }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"status\": \"success\", \"message\": \"Alert processed.\" }",
+        "options": { "responseCode": 200 }
+      },
+      "id": "respond-alert",
+      "name": "Respond: Alert Handled",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1700, 400]
+    }
+  ],
+  "connections": {
+    "Security Alert Webhook": {
+      "main": [[{ "node": "Validate API Key", "type": "main", "index": 0 }]]
+    },
+    "Validate API Key": {
+      "main": [
+        [{ "node": "Parse Alert", "type": "main", "index": 0 }],
+        [{ "node": "Reject", "type": "main", "index": 0 }]
+      ]
+    },
+    "Parse Alert": {
+      "main": [[
+        { "node": "Route Alert Type", "type": "main", "index": 0 },
+        { "node": "Telegram: Alert Admin", "type": "main", "index": 0 },
+        { "node": "RDS: Log Alert", "type": "main", "index": 0 },
+        { "node": "Sheets: Log Alert", "type": "main", "index": 0 }
+      ]]
+    },
+    "Route Alert Type": {
+      "main": [
+        [{ "node": "Email: 3x Failed Warning", "type": "main", "index": 0 }],
+        [{ "node": "Email: Account Locked", "type": "main", "index": 0 }],
+        [{ "node": "Email: Password Changed", "type": "main", "index": 0 }],
+        [{ "node": "Respond: Alert Handled", "type": "main", "index": 0 }]
+      ]
+    },
+    "RDS: Log Alert": { "main": [[{ "node": "Respond: Alert Handled", "type": "main", "index": 0 }]] },
+    "Email: 3x Failed Warning": { "main": [[{ "node": "Respond: Alert Handled", "type": "main", "index": 0 }]] },
+    "Email: Account Locked": { "main": [[{ "node": "Respond: Alert Handled", "type": "main", "index": 0 }]] },
+    "Email: Password Changed": { "main": [[{ "node": "Respond: Alert Handled", "type": "main", "index": 0 }]] }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "errorWorkflow": "WF8-error-monitor"
+  },
+  "tags": [{ "name": "SecureVault" }, { "name": "Security" }, { "name": "Alerts" }],
+  "triggerCount": 1,
+  "pinData": {}
+}

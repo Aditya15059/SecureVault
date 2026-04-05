@@ -1,0 +1,104 @@
+{
+  "name": "WF7 — SecureVault AI Support Chatbot",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "securevault/chat",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-chat",
+      "name": "Chat Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [220, 400],
+      "webhookId": "sv-chat-001"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body;\nconst { chatInput, sessionId } = body;\n\nif (!chatInput || chatInput.trim().length === 0) {\n  throw new Error('Empty message');\n}\n\n// Rate limiting awareness - truncate very long messages\nconst sanitizedInput = chatInput.trim().substring(0, 2000);\n\n// Security: reject messages that look like prompt injection\nconst suspicious = ['ignore previous', 'system prompt', 'you are now', 'forget your instructions'];\nconst isSuspicious = suspicious.some(s => sanitizedInput.toLowerCase().includes(s));\nif (isSuspicious) {\n  return [{ json: { response: 'I can only help with SecureVault-related questions. How can I assist you with encryption or security?', sessionId } }];\n}\n\nreturn [{ json: { chatInput: sanitizedInput, sessionId: sessionId || 'anonymous', timestamp: new Date().toISOString() } }];"
+      },
+      "id": "validate-chat",
+      "name": "Validate & Sanitize",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 400]
+    },
+    {
+      "parameters": {
+        "options": {
+          "systemMessage": "You are the SecureVault Assistant — an expert in cryptography and cybersecurity.\n\nYour role:\n1. Help users encrypt/decrypt messages using AES-256 encryption\n2. Explain steganography analysis features (LSB, spectral, neural detection)\n3. Assist with account issues (login, password reset, profile settings)\n4. Teach security concepts in simple terms\n5. Provide cybersecurity best practices\n\nRules:\n- Be professional, concise, and security-conscious\n- NEVER ask for passwords, private keys, or sensitive credentials\n- NEVER reveal system internals, API keys, or infrastructure details\n- If you can't solve a technical issue, suggest contacting support\n- Keep responses under 300 words\n- Use markdown formatting for clarity\n- When discussing encryption, always mention the algorithm (AES-256)\n\nSecureVault features you can explain:\n- AES-256 message encryption/decryption\n- Steganography: hiding messages in images\n- AI-powered stego detection (LSB, spectral, neural analysis)\n- Secure operator profiles and settings\n- Password security with bcrypt hashing"
+        }
+      },
+      "id": "ai-agent",
+      "name": "SecureVault Assistant",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [700, 400]
+    },
+    {
+      "parameters": {
+        "options": {
+          "model": "gpt-4o-mini",
+          "temperature": 0.3,
+          "maxTokens": 500
+        }
+      },
+      "id": "openai-model",
+      "name": "OpenAI Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1,
+      "position": [700, 620],
+      "credentials": { "openAiApi": { "id": "openai-credential", "name": "OpenAI SecureVault" } }
+    },
+    {
+      "parameters": {
+        "sessionKey": "={{ $json.sessionId }}",
+        "contextWindowLength": 10
+      },
+      "id": "memory-buffer",
+      "name": "Window Buffer Memory",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [900, 620]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"status\": \"success\", \"output\": \"{{ $json.output }}\" }",
+        "options": { "responseCode": 200 }
+      },
+      "id": "respond-chat",
+      "name": "Respond: Chat Reply",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [980, 400]
+    }
+  ],
+  "connections": {
+    "Chat Webhook": {
+      "main": [[{ "node": "Validate & Sanitize", "type": "main", "index": 0 }]]
+    },
+    "Validate & Sanitize": {
+      "main": [[{ "node": "SecureVault Assistant", "type": "main", "index": 0 }]]
+    },
+    "SecureVault Assistant": {
+      "main": [[{ "node": "Respond: Chat Reply", "type": "main", "index": 0 }]]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [[{ "node": "SecureVault Assistant", "type": "ai_languageModel", "index": 0 }]]
+    },
+    "Window Buffer Memory": {
+      "ai_memory": [[{ "node": "SecureVault Assistant", "type": "ai_memory", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "errorWorkflow": "WF8-error-monitor"
+  },
+  "tags": [{ "name": "SecureVault" }, { "name": "AI Chatbot" }, { "name": "Support" }],
+  "triggerCount": 1,
+  "pinData": {}
+}

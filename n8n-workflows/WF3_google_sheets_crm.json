@@ -1,0 +1,276 @@
+{
+  "name": "WF3 — SecureVault Google Sheets CRM Logger",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "securevault/events",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-events",
+      "name": "Events Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [220, 400],
+      "webhookId": "sv-events-001"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "combinator": "and",
+          "conditions": [
+            {
+              "leftValue": "={{ $json.headers['x-api-key'] }}",
+              "rightValue": "={{ $env.SV_API_KEY }}",
+              "operator": { "type": "string", "operation": "equals" }
+            }
+          ]
+        }
+      },
+      "id": "api-key-check",
+      "name": "Validate API Key",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [440, 400]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"status\": \"error\", \"message\": \"Unauthorized\" }",
+        "options": { "responseCode": 401 }
+      },
+      "id": "reject-events",
+      "name": "Reject",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [600, 600]
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body;\nconst { eventType, email, userId, timestamp, executionId, ip, userAgent, metadata } = body;\n\nif (!eventType) throw new Error('eventType is required');\n\nreturn [{\n  json: {\n    eventType,\n    email: (email || '').toLowerCase().trim(),\n    userId: userId || 'unknown',\n    timestamp: timestamp || new Date().toISOString(),\n    executionId: executionId || $execution.id,\n    ip: ip || 'unknown',\n    userAgent: (userAgent || 'unknown').substring(0, 500),\n    metadata: metadata || {},\n    extra: JSON.stringify(metadata || {})\n  }\n}];"
+      },
+      "id": "validate-events",
+      "name": "Validate & Format",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, 400]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            { "outputIndex": 0, "conditions": { "conditions": [{ "leftValue": "={{ $json.eventType }}", "rightValue": "user.registered", "operator": { "type": "string", "operation": "equals" } }] } },
+            { "outputIndex": 1, "conditions": { "conditions": [{ "leftValue": "={{ $json.eventType }}", "rightValue": "login.success", "operator": { "type": "string", "operation": "equals" } }] } },
+            { "outputIndex": 2, "conditions": { "conditions": [{ "leftValue": "={{ $json.eventType }}", "rightValue": "login.failed", "operator": { "type": "string", "operation": "equals" } }] } },
+            { "outputIndex": 3, "conditions": { "conditions": [{ "leftValue": "={{ $json.eventType }}", "rightValue": "message.encrypted", "operator": { "type": "string", "operation": "equals" } }] } },
+            { "outputIndex": 3, "conditions": { "conditions": [{ "leftValue": "={{ $json.eventType }}", "rightValue": "message.decrypted", "operator": { "type": "string", "operation": "equals" } }] } },
+            { "outputIndex": 4, "conditions": { "conditions": [{ "leftValue": "={{ $json.eventType }}", "rightValue": "security.", "operator": { "type": "string", "operation": "startsWith" } }] } }
+          ],
+          "fallbackOutput": 5
+        },
+        "options": {}
+      },
+      "id": "switch-event",
+      "name": "Route by Event Type",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [900, 400]
+    },
+    {
+      "parameters": {
+        "documentId": { "__rl": true, "mode": "list", "value": "" },
+        "sheetName": { "__rl": true, "value": "Users CRM" },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Timestamp": "={{ $json.timestamp }}",
+            "EventType": "={{ $json.eventType }}",
+            "UserId": "={{ $json.userId }}",
+            "Email": "={{ $json.email }}",
+            "Name": "={{ $json.metadata?.name || '' }}",
+            "IPAddress": "={{ $json.ip }}",
+            "UserAgent": "={{ $json.userAgent }}",
+            "Extra": "={{ $json.extra }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "sheets-users-crm",
+      "name": "Sheets: Users CRM",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [1160, 100],
+      "credentials": { "googleSheetsOAuth2Api": { "id": "gsheets-credential", "name": "Google Sheets SecureVault" } }
+    },
+    {
+      "parameters": {
+        "documentId": { "__rl": true, "mode": "list", "value": "" },
+        "sheetName": { "__rl": true, "value": "Users CRM" },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Timestamp": "={{ $json.timestamp }}",
+            "EventType": "login.success",
+            "UserId": "={{ $json.userId }}",
+            "Email": "={{ $json.email }}",
+            "IPAddress": "={{ $json.ip }}",
+            "Extra": "={{ $json.extra }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "sheets-login-success",
+      "name": "Sheets: Login Success",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [1160, 260],
+      "credentials": { "googleSheetsOAuth2Api": { "id": "gsheets-credential", "name": "Google Sheets SecureVault" } }
+    },
+    {
+      "parameters": {
+        "documentId": { "__rl": true, "mode": "list", "value": "" },
+        "sheetName": { "__rl": true, "value": "Users CRM" },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Timestamp": "={{ $json.timestamp }}",
+            "EventType": "login.failed",
+            "UserId": "={{ $json.userId }}",
+            "Email": "={{ $json.email }}",
+            "IPAddress": "={{ $json.ip }}",
+            "Extra": "={{ $json.extra }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "sheets-login-failed",
+      "name": "Sheets: Login Failed",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [1160, 420],
+      "credentials": { "googleSheetsOAuth2Api": { "id": "gsheets-credential", "name": "Google Sheets SecureVault" } }
+    },
+    {
+      "parameters": {
+        "documentId": { "__rl": true, "mode": "list", "value": "" },
+        "sheetName": { "__rl": true, "value": "Encryption Activity" },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Timestamp": "={{ $json.timestamp }}",
+            "UserId": "={{ $json.userId }}",
+            "Action": "={{ $json.eventType }}",
+            "MessageLength": "={{ $json.metadata?.messageLength || 0 }}",
+            "Success": "YES",
+            "Extra": "={{ $json.extra }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "sheets-encryption",
+      "name": "Sheets: Encryption Log",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [1160, 580],
+      "credentials": { "googleSheetsOAuth2Api": { "id": "gsheets-credential", "name": "Google Sheets SecureVault" } }
+    },
+    {
+      "parameters": {
+        "documentId": { "__rl": true, "mode": "list", "value": "" },
+        "sheetName": { "__rl": true, "value": "Security Alerts" },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Timestamp": "={{ $json.timestamp }}",
+            "UserId": "={{ $json.userId }}",
+            "Email": "={{ $json.email }}",
+            "AlertType": "={{ $json.eventType }}",
+            "IPAddress": "={{ $json.ip }}",
+            "ActionTaken": "Logged"
+          }
+        },
+        "options": {}
+      },
+      "id": "sheets-security",
+      "name": "Sheets: Security Alerts",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [1160, 740],
+      "credentials": { "googleSheetsOAuth2Api": { "id": "gsheets-credential", "name": "Google Sheets SecureVault" } }
+    },
+    {
+      "parameters": {
+        "documentId": { "__rl": true, "mode": "list", "value": "" },
+        "sheetName": { "__rl": true, "value": "Users CRM" },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Timestamp": "={{ $json.timestamp }}",
+            "EventType": "={{ $json.eventType }}",
+            "UserId": "={{ $json.userId }}",
+            "Email": "={{ $json.email }}",
+            "Extra": "={{ $json.extra }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "sheets-other",
+      "name": "Sheets: Other Events",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [1160, 900],
+      "credentials": { "googleSheetsOAuth2Api": { "id": "gsheets-credential", "name": "Google Sheets SecureVault" } }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"status\": \"success\", \"message\": \"Event logged to CRM.\" }",
+        "options": { "responseCode": 200 }
+      },
+      "id": "respond-events",
+      "name": "Respond: Logged",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1400, 400]
+    }
+  ],
+  "connections": {
+    "Events Webhook": {
+      "main": [[{ "node": "Validate API Key", "type": "main", "index": 0 }]]
+    },
+    "Validate API Key": {
+      "main": [
+        [{ "node": "Validate & Format", "type": "main", "index": 0 }],
+        [{ "node": "Reject", "type": "main", "index": 0 }]
+      ]
+    },
+    "Validate & Format": {
+      "main": [[{ "node": "Route by Event Type", "type": "main", "index": 0 }]]
+    },
+    "Route by Event Type": {
+      "main": [
+        [{ "node": "Sheets: Users CRM", "type": "main", "index": 0 }],
+        [{ "node": "Sheets: Login Success", "type": "main", "index": 0 }],
+        [{ "node": "Sheets: Login Failed", "type": "main", "index": 0 }],
+        [{ "node": "Sheets: Encryption Log", "type": "main", "index": 0 }],
+        [{ "node": "Sheets: Security Alerts", "type": "main", "index": 0 }],
+        [{ "node": "Sheets: Other Events", "type": "main", "index": 0 }]
+      ]
+    },
+    "Sheets: Users CRM": { "main": [[{ "node": "Respond: Logged", "type": "main", "index": 0 }]] },
+    "Sheets: Login Success": { "main": [[{ "node": "Respond: Logged", "type": "main", "index": 0 }]] },
+    "Sheets: Login Failed": { "main": [[{ "node": "Respond: Logged", "type": "main", "index": 0 }]] },
+    "Sheets: Encryption Log": { "main": [[{ "node": "Respond: Logged", "type": "main", "index": 0 }]] },
+    "Sheets: Security Alerts": { "main": [[{ "node": "Respond: Logged", "type": "main", "index": 0 }]] },
+    "Sheets: Other Events": { "main": [[{ "node": "Respond: Logged", "type": "main", "index": 0 }]] }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "errorWorkflow": "WF8-error-monitor"
+  },
+  "tags": [{ "name": "SecureVault" }, { "name": "CRM" }, { "name": "Google Sheets" }],
+  "triggerCount": 1,
+  "pinData": {}
+}

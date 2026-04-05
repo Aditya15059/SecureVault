@@ -1,0 +1,212 @@
+{
+  "name": "WF2 — SecureVault Welcome Email Drip",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "securevault/drip-start",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-drip",
+      "name": "Drip Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [220, 300],
+      "webhookId": "sv-drip-001"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "combinator": "and",
+          "conditions": [
+            {
+              "leftValue": "={{ $json.headers['x-api-key'] }}",
+              "rightValue": "={{ $env.SV_API_KEY }}",
+              "operator": { "type": "string", "operation": "equals" }
+            }
+          ]
+        }
+      },
+      "id": "check-key-drip",
+      "name": "Validate API Key",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [440, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"status\": \"error\", \"message\": \"Unauthorized\" }",
+        "options": { "responseCode": 401 }
+      },
+      "id": "reject-drip",
+      "name": "Reject",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [600, 500]
+    },
+    {
+      "parameters": {
+        "jsCode": "const { name, email, userId } = $input.first().json.body;\nif (!email || !name) throw new Error('Missing name or email');\nreturn [{ json: { name, email, userId, timestamp: new Date().toISOString() } }];"
+      },
+      "id": "validate-drip",
+      "name": "Validate Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"status\": \"success\", \"message\": \"Drip sequence started.\" }",
+        "options": { "responseCode": 200 }
+      },
+      "id": "respond-drip",
+      "name": "Respond OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [880, 300]
+    },
+    {
+      "parameters": {
+        "amount": 1,
+        "unit": "days"
+      },
+      "id": "wait-day1",
+      "name": "Wait 1 Day",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [1100, 300]
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.email }}",
+        "subject": "⚡ Encrypt your first message in 60 seconds",
+        "emailType": "html",
+        "message": "<!DOCTYPE html><html><body style=\"margin:0;padding:0;background:#06030f;font-family:'Segoe UI',Arial,sans-serif\"><div style=\"max-width:600px;margin:0 auto;padding:40px 20px\"><div style=\"text-align:center;padding:24px;background:linear-gradient(135deg,#7c3aed,#3b82f6);border-radius:16px 16px 0 0\"><h1 style=\"color:#fff;font-size:22px;margin:0\">⚡ Your Encryption Guide</h1></div><div style=\"background:#0e0825;padding:32px;border:1px solid rgba(124,58,237,0.2);border-top:0\"><h2 style=\"color:#f1f5f9;font-size:20px;margin:0 0 16px\">Hey {{ $json.name }},</h2><p style=\"color:#94a3b8;font-size:15px;line-height:1.6\">Ready to send your first encrypted message? It only takes 60 seconds:</p><ol style=\"color:#e2e8f0;font-size:14px;line-height:2\"><li>Navigate to the <strong>Encrypt</strong> page</li><li>Type your secret message</li><li>Set an encryption key (or generate one)</li><li>Hit <strong>Encrypt</strong> — that's it!</li></ol><p style=\"color:#94a3b8;font-size:14px;line-height:1.6\">Your message is encrypted with <strong>AES-256</strong>, the same standard used by governments worldwide.</p><a href=\"https://aditya15059.github.io/SecureVault/#/encrypt\" style=\"display:block;text-align:center;background:linear-gradient(135deg,#7c3aed,#3b82f6);color:#fff;text-decoration:none;padding:14px;border-radius:10px;font-weight:600;font-size:15px;margin-top:24px\">Try Encryption Now →</a></div><div style=\"padding:16px;text-align:center;background:#060212;border-radius:0 0 16px 16px;border:1px solid rgba(124,58,237,0.1);border-top:0\"><p style=\"color:#475569;font-size:11px;margin:0\">SecureVault — Day 1 of your security journey</p></div></div></body></html>",
+        "options": {}
+      },
+      "id": "email-day1",
+      "name": "Gmail: Day 1 — Encryption Guide",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [1320, 300],
+      "credentials": { "gmailOAuth2": { "id": "gmail-credential", "name": "Gmail SecureVault" } }
+    },
+    {
+      "parameters": {
+        "amount": 2,
+        "unit": "days"
+      },
+      "id": "wait-day3",
+      "name": "Wait 2 More Days",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [1540, 300]
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.email }}",
+        "subject": "🔍 Hidden messages in plain sight — try steganography",
+        "emailType": "html",
+        "message": "<!DOCTYPE html><html><body style=\"margin:0;padding:0;background:#06030f;font-family:'Segoe UI',Arial,sans-serif\"><div style=\"max-width:600px;margin:0 auto;padding:40px 20px\"><div style=\"text-align:center;padding:24px;background:linear-gradient(135deg,#3b82f6,#06b6d4);border-radius:16px 16px 0 0\"><h1 style=\"color:#fff;font-size:22px;margin:0\">🔍 Steganography</h1></div><div style=\"background:#0e0825;padding:32px;border:1px solid rgba(59,130,246,0.2);border-top:0\"><h2 style=\"color:#f1f5f9;font-size:20px;margin:0 0 16px\">Did you know, {{ $json.name }}?</h2><p style=\"color:#94a3b8;font-size:15px;line-height:1.6\">Steganography is the art of hiding messages inside ordinary-looking images. Unlike encryption (which scrambles text), steganography makes the message <em>invisible</em>.</p><div style=\"background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.2);border-radius:12px;padding:20px;margin:20px 0\"><h3 style=\"color:#93c5fd;font-size:14px;margin:0 0 8px\">How it works:</h3><ul style=\"color:#e2e8f0;font-size:14px;line-height:1.8;margin:0;padding-left:20px\"><li><strong>LSB Analysis</strong> — Detects hidden data in least-significant bits</li><li><strong>Spectral Analysis</strong> — Reveals patterns invisible to the naked eye</li><li><strong>Neural Detection</strong> — AI-powered stego detection</li></ul></div><a href=\"https://aditya15059.github.io/SecureVault/#/steganography\" style=\"display:block;text-align:center;background:linear-gradient(135deg,#3b82f6,#06b6d4);color:#fff;text-decoration:none;padding:14px;border-radius:10px;font-weight:600;font-size:15px\">Explore Steganography →</a></div><div style=\"padding:16px;text-align:center;background:#060212;border-radius:0 0 16px 16px;border:1px solid rgba(59,130,246,0.1);border-top:0\"><p style=\"color:#475569;font-size:11px;margin:0\">SecureVault — Day 3 feature spotlight</p></div></div></body></html>",
+        "options": {}
+      },
+      "id": "email-day3",
+      "name": "Gmail: Day 3 — Steganography",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [1760, 300],
+      "credentials": { "gmailOAuth2": { "id": "gmail-credential", "name": "Gmail SecureVault" } }
+    },
+    {
+      "parameters": {
+        "amount": 4,
+        "unit": "days"
+      },
+      "id": "wait-day7",
+      "name": "Wait 4 More Days",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [1980, 300]
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.email }}",
+        "subject": "🛡️ 7 security habits every operator should have",
+        "emailType": "html",
+        "message": "<!DOCTYPE html><html><body style=\"margin:0;padding:0;background:#06030f;font-family:'Segoe UI',Arial,sans-serif\"><div style=\"max-width:600px;margin:0 auto;padding:40px 20px\"><div style=\"text-align:center;padding:24px;background:linear-gradient(135deg,#22c55e,#06b6d4);border-radius:16px 16px 0 0\"><h1 style=\"color:#fff;font-size:22px;margin:0\">🛡️ Security Best Practices</h1></div><div style=\"background:#0e0825;padding:32px;border:1px solid rgba(34,197,94,0.2);border-top:0\"><h2 style=\"color:#f1f5f9;font-size:20px;margin:0 0 16px\">One week in, {{ $json.name }}!</h2><p style=\"color:#94a3b8;font-size:15px;line-height:1.6;margin-bottom:20px\">Here are 7 habits that'll keep your communications bulletproof:</p><ol style=\"color:#e2e8f0;font-size:14px;line-height:2.2\"><li>Use <strong>unique passwords</strong> for every service</li><li>Enable <strong>2FA</strong> wherever available</li><li>Never share encryption keys via unencrypted channels</li><li>Rotate your encryption keys <strong>monthly</strong></li><li>Verify file integrity before sharing</li><li>Check for steganographic content in received images</li><li>Review your security settings in SecureVault regularly</li></ol><div style=\"background:rgba(124,58,237,0.1);border:1px solid rgba(124,58,237,0.3);border-radius:12px;padding:20px;margin:24px 0;text-align:center\"><p style=\"color:#a78bfa;font-size:14px;margin:0 0 12px\">💼 Share SecureVault with your team</p><a href=\"https://aditya15059.github.io/SecureVault/\" style=\"color:#7c3aed;font-weight:600;font-size:14px\">aditya15059.github.io/SecureVault</a></div></div><div style=\"padding:16px;text-align:center;background:#060212;border-radius:0 0 16px 16px;border:1px solid rgba(34,197,94,0.1);border-top:0\"><p style=\"color:#475569;font-size:11px;margin:0\">SecureVault — Your 7-day onboarding is complete! 🎉</p></div></div></body></html>",
+        "options": {}
+      },
+      "id": "email-day7",
+      "name": "Gmail: Day 7 — Security Tips",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [2200, 300],
+      "credentials": { "gmailOAuth2": { "id": "gmail-credential", "name": "Gmail SecureVault" } }
+    },
+    {
+      "parameters": {
+        "documentId": { "__rl": true, "mode": "list", "value": "" },
+        "sheetName": { "__rl": true, "mode": "list", "value": "" },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": { "SequenceComplete": "YES" }
+        },
+        "options": {
+          "cellFormat": "USER_ENTERED"
+        }
+      },
+      "id": "sheets-mark-complete",
+      "name": "Sheets: Mark Sequence Complete",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [2420, 300],
+      "credentials": { "googleSheetsOAuth2Api": { "id": "gsheets-credential", "name": "Google Sheets SecureVault" } }
+    }
+  ],
+  "connections": {
+    "Drip Webhook": {
+      "main": [[{ "node": "Validate API Key", "type": "main", "index": 0 }]]
+    },
+    "Validate API Key": {
+      "main": [
+        [{ "node": "Validate Input", "type": "main", "index": 0 }],
+        [{ "node": "Reject", "type": "main", "index": 0 }]
+      ]
+    },
+    "Validate Input": {
+      "main": [[{ "node": "Respond OK", "type": "main", "index": 0 }]]
+    },
+    "Respond OK": {
+      "main": [[{ "node": "Wait 1 Day", "type": "main", "index": 0 }]]
+    },
+    "Wait 1 Day": {
+      "main": [[{ "node": "Gmail: Day 1 — Encryption Guide", "type": "main", "index": 0 }]]
+    },
+    "Gmail: Day 1 — Encryption Guide": {
+      "main": [[{ "node": "Wait 2 More Days", "type": "main", "index": 0 }]]
+    },
+    "Wait 2 More Days": {
+      "main": [[{ "node": "Gmail: Day 3 — Steganography", "type": "main", "index": 0 }]]
+    },
+    "Gmail: Day 3 — Steganography": {
+      "main": [[{ "node": "Wait 4 More Days", "type": "main", "index": 0 }]]
+    },
+    "Wait 4 More Days": {
+      "main": [[{ "node": "Gmail: Day 7 — Security Tips", "type": "main", "index": 0 }]]
+    },
+    "Gmail: Day 7 — Security Tips": {
+      "main": [[{ "node": "Sheets: Mark Sequence Complete", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "errorWorkflow": "WF8-error-monitor"
+  },
+  "tags": [{ "name": "SecureVault" }, { "name": "Email Drip" }, { "name": "Production" }],
+  "triggerCount": 1,
+  "pinData": {}
+}

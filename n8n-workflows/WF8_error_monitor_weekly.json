@@ -1,0 +1,169 @@
+{
+  "name": "WF8 — SecureVault Error Monitor + Weekly Report",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "error-trigger",
+      "name": "On Workflow Error",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [220, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "const errorData = $input.first().json;\n\nconst workflowName = errorData.workflow?.name || 'Unknown Workflow';\nconst errorMessage = errorData.execution?.error?.message || 'Unknown error';\nconst nodeId = errorData.execution?.lastNodeExecuted || 'Unknown node';\nconst executionId = errorData.execution?.id || 'N/A';\nconst timestamp = new Date().toISOString();\n\nreturn [{\n  json: {\n    workflowName,\n    errorMessage: errorMessage.substring(0, 500),\n    nodeId,\n    executionId,\n    timestamp,\n    severity: 'critical'\n  }\n}];"
+      },
+      "id": "format-error",
+      "name": "Format Error Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 200]
+    },
+    {
+      "parameters": {
+        "documentId": { "__rl": true, "mode": "list", "value": "" },
+        "sheetName": { "__rl": true, "value": "Workflow Errors" },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Timestamp": "={{ $json.timestamp }}",
+            "WorkflowName": "={{ $json.workflowName }}",
+            "ErrorMessage": "={{ $json.errorMessage }}",
+            "FailedNode": "={{ $json.nodeId }}",
+            "ExecutionId": "={{ $json.executionId }}",
+            "Severity": "={{ $json.severity }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "sheets-error",
+      "name": "Sheets: Log Error",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [720, 100],
+      "credentials": { "googleSheetsOAuth2Api": { "id": "gsheets-credential", "name": "Google Sheets SecureVault" } }
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $env.ADMIN_EMAIL }}",
+        "subject": "🔴 n8n Workflow Failed: {{ $json.workflowName }}",
+        "emailType": "html",
+        "message": "<!DOCTYPE html><html><body style=\"margin:0;padding:0;background:#06030f;font-family:'Segoe UI',Arial,sans-serif\"><div style=\"max-width:500px;margin:0 auto;padding:40px 20px\"><div style=\"padding:20px;background:#ef4444;border-radius:12px 12px 0 0;text-align:center\"><h1 style=\"color:#fff;font-size:20px;margin:0\">🔴 Workflow Failure Alert</h1></div><div style=\"background:#0e0825;padding:28px;border:1px solid rgba(239,68,68,0.3);border-top:0\"><table style=\"width:100%;border-collapse:collapse\"><tr><td style=\"color:#64748b;padding:8px 0;font-size:13px\">Workflow</td><td style=\"color:#f1f5f9;padding:8px 0;font-size:13px;font-weight:600\">{{ $json.workflowName }}</td></tr><tr><td style=\"color:#64748b;padding:8px 0;font-size:13px\">Failed Node</td><td style=\"color:#fca5a5;padding:8px 0;font-size:13px\">{{ $json.nodeId }}</td></tr><tr><td style=\"color:#64748b;padding:8px 0;font-size:13px\">Error</td><td style=\"color:#fca5a5;padding:8px 0;font-size:13px\">{{ $json.errorMessage }}</td></tr><tr><td style=\"color:#64748b;padding:8px 0;font-size:13px\">Execution ID</td><td style=\"color:#94a3b8;padding:8px 0;font-size:13px;font-family:monospace\">{{ $json.executionId }}</td></tr><tr><td style=\"color:#64748b;padding:8px 0;font-size:13px\">Time</td><td style=\"color:#94a3b8;padding:8px 0;font-size:13px\">{{ $json.timestamp }}</td></tr></table></div><div style=\"padding:12px;text-align:center;background:#060212;border-radius:0 0 12px 12px\"><p style=\"color:#475569;font-size:11px;margin:0\">SecureVault n8n Error Monitor</p></div></div></body></html>",
+        "options": {}
+      },
+      "id": "gmail-error",
+      "name": "Gmail: Alert Admin",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [720, 280],
+      "credentials": { "gmailOAuth2": { "id": "gmail-credential", "name": "Gmail SecureVault" } }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $env.ADMIN_TELEGRAM_CHAT_ID }}",
+        "text": "🔴 *AUTOMATION FAILURE*\n\n📋 Workflow: `{{ $json.workflowName }}`\n❌ Error: {{ $json.errorMessage }}\n🔧 Node: `{{ $json.nodeId }}`\n🆔 Execution: `{{ $json.executionId }}`\n🕐 Time: {{ $json.timestamp }}",
+        "additionalFields": { "parse_mode": "Markdown" }
+      },
+      "id": "telegram-error",
+      "name": "Telegram: Alert Admin",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [720, 460],
+      "credentials": { "telegramApi": { "id": "telegram-credential", "name": "SecureVault Bot" } }
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{ "triggerAtHour": 8, "triggerAtDay": 1 }]
+        }
+      },
+      "id": "cron-weekly",
+      "name": "Weekly Cron (Mon 8AM)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [220, 700]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n  (SELECT COUNT(*) FROM sv_registrations WHERE registered_at >= NOW() - INTERVAL '7 days') AS new_users_week,\n  (SELECT COUNT(*) FROM sv_registrations WHERE registered_at >= NOW() - INTERVAL '14 days' AND registered_at < NOW() - INTERVAL '7 days') AS new_users_prev_week,\n  (SELECT COUNT(*) FROM sv_events WHERE event_type = 'login.success' AND created_at >= NOW() - INTERVAL '7 days') AS logins_week,\n  (SELECT COUNT(*) FROM sv_encryption_log WHERE created_at >= NOW() - INTERVAL '7 days' AND action = 'message.encrypted') AS encryptions_week,\n  (SELECT COUNT(*) FROM sv_encryption_log WHERE created_at >= NOW() - INTERVAL '7 days' AND action = 'message.decrypted') AS decryptions_week,\n  (SELECT COUNT(*) FROM sv_security_alerts WHERE created_at >= NOW() - INTERVAL '7 days') AS alerts_week,\n  (SELECT COUNT(*) FROM sv_events WHERE event_type = 'login.failed' AND created_at >= NOW() - INTERVAL '7 days') AS failed_logins_week,\n  (SELECT COUNT(*) FROM sv_registrations) AS total_users;",
+        "options": {}
+      },
+      "id": "rds-weekly-stats",
+      "name": "RDS: Weekly Stats",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [460, 700],
+      "credentials": { "postgres": { "id": "rds-credential", "name": "AWS RDS SecureVault" } }
+    },
+    {
+      "parameters": {
+        "jsCode": "const stats = $input.first().json;\nconst prevUsers = parseInt(stats.new_users_prev_week) || 0;\nconst currUsers = parseInt(stats.new_users_week) || 0;\nconst change = prevUsers > 0 ? Math.round(((currUsers - prevUsers) / prevUsers) * 100) : 100;\nconst changeStr = change >= 0 ? `+${change}%` : `${change}%`;\nconst weekStart = new Date();\nweekStart.setDate(weekStart.getDate() - 7);\n\nreturn [{\n  json: {\n    ...stats,\n    change: changeStr,\n    weekLabel: weekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),\n    generatedAt: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "calc-stats",
+      "name": "Calculate Changes",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [700, 700]
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $env.ADMIN_EMAIL }}",
+        "subject": "📊 SecureVault Weekly Report — Week of {{ $json.weekLabel }}",
+        "emailType": "html",
+        "message": "<!DOCTYPE html><html><body style=\"margin:0;padding:0;background:#06030f;font-family:'Segoe UI',Arial,sans-serif\"><div style=\"max-width:600px;margin:0 auto;padding:40px 20px\"><div style=\"text-align:center;padding:28px;background:linear-gradient(135deg,#7c3aed,#3b82f6);border-radius:16px 16px 0 0\"><h1 style=\"color:#fff;font-size:24px;margin:0\">📊 Weekly Report</h1><p style=\"color:rgba(255,255,255,0.7);font-size:13px;margin:6px 0 0\">Week of {{ $json.weekLabel }}</p></div><div style=\"background:#0e0825;padding:32px;border:1px solid rgba(124,58,237,0.2);border-top:0\"><table style=\"width:100%;border-collapse:collapse\"><tr style=\"border-bottom:1px solid rgba(124,58,237,0.1)\"><td style=\"color:#94a3b8;padding:14px 0;font-size:14px\">👤 New Users</td><td style=\"color:#f1f5f9;padding:14px 0;font-size:18px;font-weight:700;text-align:right\">{{ $json.new_users_week }}</td><td style=\"color:{{ $json.change.startsWith('+') ? '#22c55e' : '#ef4444' }};padding:14px 0 14px 8px;font-size:13px;text-align:right\">{{ $json.change }}</td></tr><tr style=\"border-bottom:1px solid rgba(124,58,237,0.1)\"><td style=\"color:#94a3b8;padding:14px 0;font-size:14px\">🔑 Logins</td><td style=\"color:#f1f5f9;padding:14px 0;font-size:18px;font-weight:700;text-align:right\" colspan=\"2\">{{ $json.logins_week }}</td></tr><tr style=\"border-bottom:1px solid rgba(124,58,237,0.1)\"><td style=\"color:#94a3b8;padding:14px 0;font-size:14px\">🔐 Encryptions</td><td style=\"color:#a78bfa;padding:14px 0;font-size:18px;font-weight:700;text-align:right\" colspan=\"2\">{{ $json.encryptions_week }}</td></tr><tr style=\"border-bottom:1px solid rgba(124,58,237,0.1)\"><td style=\"color:#94a3b8;padding:14px 0;font-size:14px\">🔓 Decryptions</td><td style=\"color:#93c5fd;padding:14px 0;font-size:18px;font-weight:700;text-align:right\" colspan=\"2\">{{ $json.decryptions_week }}</td></tr><tr style=\"border-bottom:1px solid rgba(124,58,237,0.1)\"><td style=\"color:#94a3b8;padding:14px 0;font-size:14px\">🛡️ Security Alerts</td><td style=\"color:#fbbf24;padding:14px 0;font-size:18px;font-weight:700;text-align:right\" colspan=\"2\">{{ $json.alerts_week }}</td></tr><tr><td style=\"color:#94a3b8;padding:14px 0;font-size:14px\">❌ Failed Logins</td><td style=\"color:#fca5a5;padding:14px 0;font-size:18px;font-weight:700;text-align:right\" colspan=\"2\">{{ $json.failed_logins_week }}</td></tr></table><div style=\"margin-top:24px;padding:16px;background:rgba(124,58,237,0.1);border-radius:8px;text-align:center\"><p style=\"color:#a78bfa;font-size:13px;margin:0\">Total Users: <strong style=\"font-size:18px;color:#fff\">{{ $json.total_users }}</strong></p></div></div><div style=\"padding:12px;text-align:center;background:#060212;border-radius:0 0 16px 16px\"><p style=\"color:#475569;font-size:11px;margin:0\">Generated {{ $json.generatedAt }} | SecureVault Analytics</p></div></div></body></html>",
+        "options": {}
+      },
+      "id": "gmail-weekly",
+      "name": "Gmail: Weekly Report",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [960, 640],
+      "credentials": { "gmailOAuth2": { "id": "gmail-credential", "name": "Gmail SecureVault" } }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $env.ADMIN_TELEGRAM_CHAT_ID }}",
+        "text": "📊 *SecureVault Weekly Report*\nWeek of {{ $json.weekLabel }}\n\n👤 New Users: *{{ $json.new_users_week }}* ({{ $json.change }})\n🔑 Logins: *{{ $json.logins_week }}*\n🔐 Encryptions: *{{ $json.encryptions_week }}*\n🔓 Decryptions: *{{ $json.decryptions_week }}*\n🛡️ Alerts: *{{ $json.alerts_week }}*\n❌ Failed Logins: *{{ $json.failed_logins_week }}*\n\n📦 Total Users: *{{ $json.total_users }}*",
+        "additionalFields": { "parse_mode": "Markdown" }
+      },
+      "id": "telegram-weekly",
+      "name": "Telegram: Weekly Summary",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [960, 820],
+      "credentials": { "telegramApi": { "id": "telegram-credential", "name": "SecureVault Bot" } }
+    }
+  ],
+  "connections": {
+    "On Workflow Error": {
+      "main": [[{ "node": "Format Error Data", "type": "main", "index": 0 }]]
+    },
+    "Format Error Data": {
+      "main": [[
+        { "node": "Sheets: Log Error", "type": "main", "index": 0 },
+        { "node": "Gmail: Alert Admin", "type": "main", "index": 0 },
+        { "node": "Telegram: Alert Admin", "type": "main", "index": 0 }
+      ]]
+    },
+    "Weekly Cron (Mon 8AM)": {
+      "main": [[{ "node": "RDS: Weekly Stats", "type": "main", "index": 0 }]]
+    },
+    "RDS: Weekly Stats": {
+      "main": [[{ "node": "Calculate Changes", "type": "main", "index": 0 }]]
+    },
+    "Calculate Changes": {
+      "main": [[
+        { "node": "Gmail: Weekly Report", "type": "main", "index": 0 },
+        { "node": "Telegram: Weekly Summary", "type": "main", "index": 0 }
+      ]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true
+  },
+  "tags": [{ "name": "SecureVault" }, { "name": "Monitoring" }, { "name": "Analytics" }],
+  "triggerCount": 2,
+  "pinData": {}
+}

@@ -15,6 +15,7 @@ import About from './pages/About';
 
 import Settings from './pages/Settings';
 import DashboardLayout from './components/DashboardLayout';
+import N8NChatWidget from './components/N8NChatWidget';
 
 import Lenis from '@studio-freight/lenis';
 import gsap from 'gsap';
@@ -77,6 +78,9 @@ function App() {
             <Route path="/settings" element={<Settings />} />
           </Route>
         </Routes>
+
+        {/* AI Support Chatbot — connects to n8n WF7 */}
+        <N8NChatWidget />
       </Router>
     </>
   );

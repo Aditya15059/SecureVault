@@ -1,0 +1,200 @@
+{
+  "name": "WF1 — SecureVault Registration Trigger",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "securevault/register",
+        "responseMode": "responseNode",
+        "options": {
+          "responseHeaders": {
+            "entries": [{ "name": "X-Powered-By", "value": "SecureVault-n8n" }]
+          }
+        }
+      },
+      "id": "webhook-register",
+      "name": "Registration Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [220, 300],
+      "webhookId": "sv-register-001"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": false },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "api-key-check",
+              "leftValue": "={{ $json.headers['x-api-key'] }}",
+              "rightValue": "={{ $env.SV_API_KEY }}",
+              "operator": { "type": "string", "operation": "equals" }
+            }
+          ]
+        }
+      },
+      "id": "check-api-key",
+      "name": "Validate API Key",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [440, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"status\": \"error\", \"message\": \"Unauthorized. Invalid API key.\" }",
+        "options": { "responseCode": 401 }
+      },
+      "id": "reject-unauthorized",
+      "name": "Reject Unauthorized",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [660, 480]
+    },
+    {
+      "parameters": {
+        "jsCode": "const { name, email, userId, createdAt, plan, source, executionId } = $input.first().json.body;\n\n// Validate required fields\nif (!email || !name || !userId) {\n  throw new Error('Missing required fields: name, email, userId');\n}\n\n// Validate email format\nconst emailRegex = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/;\nif (!emailRegex.test(email)) {\n  throw new Error('Invalid email format');\n}\n\nreturn [{\n  json: {\n    name: name.trim(),\n    email: email.toLowerCase().trim(),\n    userId,\n    createdAt: createdAt || new Date().toISOString(),\n    plan: plan || 'free',\n    source: source || 'securevault-web',\n    executionId: executionId || $execution.id,\n    timestamp: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "validate-input",
+      "name": "Validate & Sanitize Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO sv_events (execution_id, event_type, user_id, email, metadata, status, source, created_at)\nVALUES (\n  '{{ $json.executionId }}',\n  'user.registered',\n  '{{ $json.userId }}',\n  '{{ $json.email }}',\n  '{{ JSON.stringify({ name: $json.name, plan: $json.plan }) }}'::jsonb,\n  'success',\n  '{{ $json.source }}',\n  '{{ $json.timestamp }}'\n)\nON CONFLICT (execution_id) DO NOTHING\nRETURNING id;",
+        "options": {}
+      },
+      "id": "rds-insert-event",
+      "name": "RDS: Log Registration Event",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [880, 200],
+      "credentials": { "postgres": { "id": "rds-credential", "name": "AWS RDS SecureVault" } }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO sv_registrations (user_id, email, username, plan, source, registered_at)\nVALUES (\n  '{{ $json.userId }}',\n  '{{ $json.email }}',\n  '{{ $json.name }}',\n  '{{ $json.plan }}',\n  '{{ $json.source }}',\n  '{{ $json.createdAt }}'\n)\nON CONFLICT (user_id) DO NOTHING;",
+        "options": {}
+      },
+      "id": "rds-insert-registration",
+      "name": "RDS: Insert Registration",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [880, 400],
+      "credentials": { "postgres": { "id": "rds-credential", "name": "AWS RDS SecureVault" } }
+    },
+    {
+      "parameters": {
+        "documentId": { "__rl": true, "mode": "list", "value": "" },
+        "sheetName": { "__rl": true, "mode": "list", "value": "" },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Timestamp": "={{ $json.timestamp }}",
+            "Name": "={{ $json.name }}",
+            "Email": "={{ $json.email }}",
+            "UserId": "={{ $json.userId }}",
+            "Plan": "={{ $json.plan }}",
+            "Source": "={{ $json.source }}",
+            "WelcomeEmailSent": "NO",
+            "Day1Sent": "NO",
+            "Day3Sent": "NO",
+            "SequenceComplete": "NO"
+          }
+        },
+        "options": {}
+      },
+      "id": "sheets-append-user",
+      "name": "Google Sheets: Log User",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [1100, 100],
+      "credentials": { "googleSheetsOAuth2Api": { "id": "gsheets-credential", "name": "Google Sheets SecureVault" } }
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.email }}",
+        "subject": "🔐 Welcome to SecureVault, {{ $json.name }}!",
+        "emailType": "html",
+        "message": "<!DOCTYPE html><html><body style=\"margin:0;padding:0;background:#06030f;font-family:'Segoe UI',Arial,sans-serif\"><div style=\"max-width:600px;margin:0 auto;padding:40px 20px\"><div style=\"text-align:center;padding:30px;background:linear-gradient(135deg,#7c3aed 0%,#3b82f6 100%);border-radius:16px 16px 0 0\"><h1 style=\"color:#fff;font-size:28px;margin:0;letter-spacing:2px\">🔐 SecureVault</h1><p style=\"color:rgba(255,255,255,0.8);margin:8px 0 0;font-size:14px\">Your Digital Fortress</p></div><div style=\"background:#0e0825;padding:40px 30px;border:1px solid rgba(124,58,237,0.2);border-top:0\"><h2 style=\"color:#f1f5f9;font-size:22px;margin:0 0 16px\">Welcome aboard, {{ $json.name }}! 🎉</h2><p style=\"color:#94a3b8;font-size:15px;line-height:1.6;margin:0 0 24px\">Your vault is initialized and ready for deployment. Here's how to get started:</p><div style=\"display:flex;flex-direction:column;gap:12px;margin-bottom:32px\"><div style=\"background:rgba(124,58,237,0.1);border:1px solid rgba(124,58,237,0.2);border-radius:12px;padding:20px\"><h3 style=\"color:#a78bfa;font-size:14px;margin:0 0 6px\">⚡ Step 1</h3><p style=\"color:#e2e8f0;font-size:14px;margin:0\">Encrypt your first message with AES-256 encryption</p></div><div style=\"background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.2);border-radius:12px;padding:20px\"><h3 style=\"color:#93c5fd;font-size:14px;margin:0 0 6px\">🔍 Step 2</h3><p style=\"color:#e2e8f0;font-size:14px;margin:0\">Try steganography analysis — hide messages in images</p></div><div style=\"background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.2);border-radius:12px;padding:20px\"><h3 style=\"color:#86efac;font-size:14px;margin:0 0 6px\">🛡️ Step 3</h3><p style=\"color:#e2e8f0;font-size:14px;margin:0\">Configure your operator profile and security settings</p></div></div><a href=\"https://aditya15059.github.io/SecureVault/#/dashboard\" style=\"display:block;text-align:center;background:linear-gradient(135deg,#7c3aed,#3b82f6);color:#fff;text-decoration:none;padding:14px 24px;border-radius:10px;font-weight:600;font-size:15px\">Open Your Vault →</a></div><div style=\"padding:20px 30px;text-align:center;border:1px solid rgba(124,58,237,0.1);border-top:0;border-radius:0 0 16px 16px;background:#060212\"><p style=\"color:#475569;font-size:12px;margin:0\">🔒 Protected by AES-256 end-to-end encryption</p><p style=\"color:#334155;font-size:11px;margin:8px 0 0\">SecureVault — Secure Secret Communication System</p></div></div></body></html>",
+        "options": { "replyTo": "noreply@securevault.io" }
+      },
+      "id": "gmail-welcome",
+      "name": "Gmail: Welcome Email",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [1100, 300],
+      "credentials": { "gmailOAuth2": { "id": "gmail-credential", "name": "Gmail SecureVault" } }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $env.ADMIN_TELEGRAM_CHAT_ID }}",
+        "text": "🔐 *New SecureVault Registration!*\n\n👤 Name: {{ $json.name }}\n📧 Email: {{ $json.email }}\n🆔 ID: {{ $json.userId }}\n📊 Plan: {{ $json.plan }}\n🕐 Time: {{ $json.timestamp }}\n🌐 Source: {{ $json.source }}",
+        "additionalFields": { "parse_mode": "Markdown" }
+      },
+      "id": "telegram-notify",
+      "name": "Telegram: Notify Admin",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [1100, 500],
+      "credentials": { "telegramApi": { "id": "telegram-credential", "name": "SecureVault Bot" } }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"status\": \"success\", \"message\": \"Registration event processed successfully.\" }",
+        "options": { "responseCode": 200 }
+      },
+      "id": "respond-success",
+      "name": "Respond: Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1340, 300]
+    }
+  ],
+  "connections": {
+    "Registration Webhook": {
+      "main": [
+        [{ "node": "Validate API Key", "type": "main", "index": 0 }]
+      ]
+    },
+    "Validate API Key": {
+      "main": [
+        [{ "node": "Validate & Sanitize Input", "type": "main", "index": 0 }],
+        [{ "node": "Reject Unauthorized", "type": "main", "index": 0 }]
+      ]
+    },
+    "Validate & Sanitize Input": {
+      "main": [
+        [
+          { "node": "RDS: Log Registration Event", "type": "main", "index": 0 },
+          { "node": "RDS: Insert Registration", "type": "main", "index": 0 },
+          { "node": "Google Sheets: Log User", "type": "main", "index": 0 },
+          { "node": "Gmail: Welcome Email", "type": "main", "index": 0 },
+          { "node": "Telegram: Notify Admin", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "RDS: Log Registration Event": {
+      "main": [[{ "node": "Respond: Success", "type": "main", "index": 0 }]]
+    },
+    "Gmail: Welcome Email": {
+      "main": [[{ "node": "Respond: Success", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": "WF8-error-monitor"
+  },
+  "staticData": null,
+  "tags": [{ "name": "SecureVault" }, { "name": "Registration" }, { "name": "Production" }],
+  "triggerCount": 1,
+  "pinData": {}
+}

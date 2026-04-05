@@ -1,0 +1,220 @@
+{
+  "name": "WF4 — SecureVault AWS RDS Sync",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "securevault/rds-sync",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-rds",
+      "name": "RDS Sync Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [220, 400],
+      "webhookId": "sv-rds-001"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "combinator": "and",
+          "conditions": [
+            {
+              "leftValue": "={{ $json.headers['x-api-key'] }}",
+              "rightValue": "={{ $env.SV_API_KEY }}",
+              "operator": { "type": "string", "operation": "equals" }
+            }
+          ]
+        }
+      },
+      "id": "api-key-rds",
+      "name": "Validate API Key",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [440, 400]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"status\": \"error\", \"message\": \"Unauthorized\" }",
+        "options": { "responseCode": 401 }
+      },
+      "id": "reject-rds",
+      "name": "Reject",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [600, 600]
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body;\nconst { eventType, email, userId, timestamp, executionId, ip, userAgent, metadata, name, plan, source, severity } = body;\n\nif (!eventType) throw new Error('eventType is required');\n\n// Sanitize strings to prevent SQL injection via parameterized queries\nconst sanitize = (str) => (str || '').toString().trim().substring(0, 255);\n\nreturn [{\n  json: {\n    eventType: sanitize(eventType),\n    email: sanitize(email).toLowerCase(),\n    userId: sanitize(userId),\n    name: sanitize(name),\n    plan: sanitize(plan) || 'free',\n    source: sanitize(source) || 'securevault-api',\n    severity: sanitize(severity) || 'info',\n    timestamp: timestamp || new Date().toISOString(),\n    executionId: executionId || $execution.id,\n    ip: sanitize(ip),\n    userAgent: (userAgent || '').substring(0, 500),\n    metadata: JSON.stringify(metadata || {})\n  }\n}];"
+      },
+      "id": "validate-rds",
+      "name": "Validate & Sanitize",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, 400]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO sv_events (execution_id, event_type, user_id, email, ip_address, user_agent, metadata, status, source, created_at)\nVALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, 'success', $8, $9)\nON CONFLICT (execution_id) DO NOTHING\nRETURNING id;",
+        "options": {
+          "queryReplacement": "={{ [$json.executionId, $json.eventType, $json.userId, $json.email, $json.ip, $json.userAgent, $json.metadata, $json.source, $json.timestamp] }}"
+        }
+      },
+      "id": "rds-insert-event",
+      "name": "RDS: Insert Event",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [900, 400],
+      "credentials": { "postgres": { "id": "rds-credential", "name": "AWS RDS SecureVault" } },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            { "outputIndex": 0, "conditions": { "conditions": [{ "leftValue": "={{ $('Validate & Sanitize').item.json.eventType }}", "rightValue": "user.registered", "operator": { "type": "string", "operation": "equals" } }] } },
+            { "outputIndex": 1, "conditions": { "conditions": [{ "leftValue": "={{ $('Validate & Sanitize').item.json.eventType }}", "rightValue": "message.", "operator": { "type": "string", "operation": "startsWith" } }] } },
+            { "outputIndex": 2, "conditions": { "conditions": [{ "leftValue": "={{ $('Validate & Sanitize').item.json.eventType }}", "rightValue": "security.", "operator": { "type": "string", "operation": "startsWith" } }] } },
+            { "outputIndex": 2, "conditions": { "conditions": [{ "leftValue": "={{ $('Validate & Sanitize').item.json.eventType }}", "rightValue": "login.failed", "operator": { "type": "string", "operation": "startsWith" } }] } },
+            { "outputIndex": 3, "conditions": { "conditions": [{ "leftValue": "={{ $('Validate & Sanitize').item.json.eventType }}", "rightValue": "login.success", "operator": { "type": "string", "operation": "equals" } }] } }
+          ],
+          "fallbackOutput": 4
+        }
+      },
+      "id": "switch-rds",
+      "name": "Route to Tables",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [1140, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO sv_registrations (user_id, email, username, plan, source, registered_at)\nVALUES ($1, $2, $3, $4, $5, $6)\nON CONFLICT (user_id) DO NOTHING;",
+        "options": {
+          "queryReplacement": "={{ [$('Validate & Sanitize').item.json.userId, $('Validate & Sanitize').item.json.email, $('Validate & Sanitize').item.json.name, $('Validate & Sanitize').item.json.plan, $('Validate & Sanitize').item.json.source, $('Validate & Sanitize').item.json.timestamp] }}"
+        }
+      },
+      "id": "rds-registration",
+      "name": "RDS: Insert Registration",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [1400, 100],
+      "credentials": { "postgres": { "id": "rds-credential", "name": "AWS RDS SecureVault" } }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO sv_encryption_log (execution_id, user_id, action, success, message_size, metadata, created_at)\nVALUES ($1, $2, $3, true, $4, $5::jsonb, $6);",
+        "options": {
+          "queryReplacement": "={{ [$('Validate & Sanitize').item.json.executionId, $('Validate & Sanitize').item.json.userId, $('Validate & Sanitize').item.json.eventType, 0, $('Validate & Sanitize').item.json.metadata, $('Validate & Sanitize').item.json.timestamp] }}"
+        }
+      },
+      "id": "rds-encryption",
+      "name": "RDS: Log Encryption",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [1400, 280],
+      "credentials": { "postgres": { "id": "rds-credential", "name": "AWS RDS SecureVault" } }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO sv_security_alerts (execution_id, user_id, email, alert_type, severity, ip_address, details, created_at)\nVALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8);",
+        "options": {
+          "queryReplacement": "={{ [$('Validate & Sanitize').item.json.executionId, $('Validate & Sanitize').item.json.userId, $('Validate & Sanitize').item.json.email, $('Validate & Sanitize').item.json.eventType, $('Validate & Sanitize').item.json.severity, $('Validate & Sanitize').item.json.ip, $('Validate & Sanitize').item.json.metadata, $('Validate & Sanitize').item.json.timestamp] }}"
+        }
+      },
+      "id": "rds-security",
+      "name": "RDS: Log Security Alert",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [1400, 460],
+      "credentials": { "postgres": { "id": "rds-credential", "name": "AWS RDS SecureVault" } }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE sv_registrations SET last_login = $1, login_count = login_count + 1 WHERE user_id = $2;",
+        "options": {
+          "queryReplacement": "={{ [$('Validate & Sanitize').item.json.timestamp, $('Validate & Sanitize').item.json.userId] }}"
+        }
+      },
+      "id": "rds-login-update",
+      "name": "RDS: Update Last Login",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [1400, 640],
+      "credentials": { "postgres": { "id": "rds-credential", "name": "AWS RDS SecureVault" } }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"status\": \"success\", \"message\": \"Event synced to RDS.\" }",
+        "options": { "responseCode": 200 }
+      },
+      "id": "respond-rds",
+      "name": "Respond: Synced",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1640, 400]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"status\": \"error\", \"message\": \"Database insertion failed.\" }",
+        "options": { "responseCode": 500 }
+      },
+      "id": "respond-rds-error",
+      "name": "Respond: DB Error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1140, 560]
+    }
+  ],
+  "connections": {
+    "RDS Sync Webhook": {
+      "main": [[{ "node": "Validate API Key", "type": "main", "index": 0 }]]
+    },
+    "Validate API Key": {
+      "main": [
+        [{ "node": "Validate & Sanitize", "type": "main", "index": 0 }],
+        [{ "node": "Reject", "type": "main", "index": 0 }]
+      ]
+    },
+    "Validate & Sanitize": {
+      "main": [[{ "node": "RDS: Insert Event", "type": "main", "index": 0 }]]
+    },
+    "RDS: Insert Event": {
+      "main": [
+        [{ "node": "Route to Tables", "type": "main", "index": 0 }],
+        [{ "node": "Respond: DB Error", "type": "main", "index": 0 }]
+      ]
+    },
+    "Route to Tables": {
+      "main": [
+        [{ "node": "RDS: Insert Registration", "type": "main", "index": 0 }],
+        [{ "node": "RDS: Log Encryption", "type": "main", "index": 0 }],
+        [{ "node": "RDS: Log Security Alert", "type": "main", "index": 0 }],
+        [{ "node": "RDS: Update Last Login", "type": "main", "index": 0 }],
+        [{ "node": "Respond: Synced", "type": "main", "index": 0 }]
+      ]
+    },
+    "RDS: Insert Registration": { "main": [[{ "node": "Respond: Synced", "type": "main", "index": 0 }]] },
+    "RDS: Log Encryption": { "main": [[{ "node": "Respond: Synced", "type": "main", "index": 0 }]] },
+    "RDS: Log Security Alert": { "main": [[{ "node": "Respond: Synced", "type": "main", "index": 0 }]] },
+    "RDS: Update Last Login": { "main": [[{ "node": "Respond: Synced", "type": "main", "index": 0 }]] }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "errorWorkflow": "WF8-error-monitor"
+  },
+  "tags": [{ "name": "SecureVault" }, { "name": "AWS RDS" }, { "name": "Database" }],
+  "triggerCount": 1,
+  "pinData": {}
+}
